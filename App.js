@@ -85,7 +85,10 @@ export default function App() {
       console.log("Recording started successfully");
       monitorRecording(recording);
     } catch (error) {
-      console.error("Failed to start recording", error);
+      console.error("Failed to start recording:", error);
+      if (recording) {
+        console.error("Recording status:", await recording.getStatusAsync());
+      }
     }
   }
 
@@ -99,14 +102,17 @@ export default function App() {
       setRecording(null);
       animatedWidth.value = withSpring(0);
     } catch (error) {
-      console.error("Failed to stop recording", error);
+      console.error("Failed to stop recording:", error);
+      if (recording) {
+        console.error("Recording status:", await recording.getStatusAsync());
+      }
     }
   }
 
   async function sendAudioToGoogle(uri) {
     const audioFile = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
 
-    const apiKey = "YOUR_ACTUAL_API_KEY"; // Replace with your actual API key
+    const apiKey = "YOUR_ACTUAL_API_KEY"; //
     const googleAPI = `https://speech.googleapis.com/v1/speech:recognize?key=${apiKey}`;
     const body = JSON.stringify({
       config: {
@@ -139,11 +145,13 @@ export default function App() {
       if (recording) {
         const status = await recording.getStatusAsync();
         console.log("Recording status:", status);
-        const volume = status.metering;
-        console.log("Current volume level:", volume);
-        const normalizedWidth = Math.max(0, Math.min(width, (volume / -160) * width));
-        console.log("Normalized width:", normalizedWidth);
-        animatedWidth.value = withSpring(normalizedWidth, { damping: 20, stiffness: 90 });
+        if (status.isRecording) {
+          const volume = status.metering;
+          console.log("Current volume level:", volume);
+          const normalizedWidth = Math.max(0, Math.min(width, (volume / -160) * width));
+          console.log("Normalized width:", normalizedWidth);
+          animatedWidth.value = withSpring(normalizedWidth, { damping: 20, stiffness: 90 });
+        }
       }
     }, 100);
 
