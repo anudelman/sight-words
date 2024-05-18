@@ -38,9 +38,28 @@ export default function App() {
   const intervalRef = useRef(null);
   const animatedWidth = useSharedValue(0);
 
+  const flatListRef = useRef();  // Reference to the FlatList
+
   useEffect(() => {
-    return () => clearInterval(intervalRef.current); // Clear the interval when the component unmounts
+    const timer = setTimeout(() => {
+      if (flatListRef.current && words.length > 1) {
+        flatListRef.current.scrollToOffset({ animated: true, offset: width / 2 });
+        setTimeout(() => {
+          flatListRef.current.scrollToOffset({ animated: true, offset: 0 });
+        }, 800);  // Return to initial position after 800ms
+      }
+    }, 1000);  // Initial delay of 1000ms
+
+    return () => {
+      clearTimeout(timer);
+      clearInterval(intervalRef.current);
+      if (recording) {
+        stopRecording();
+      }
+    };
   }, []);
+
+ 
 
   const words = [
     "the", "of", "and", "a", "to", "in", "is", "you", "that", "it", "he", "was", 
@@ -81,6 +100,7 @@ export default function App() {
           sampleRate: 44100,
           numberOfChannels: 1,
           bitRate: 128000,
+          meteringEnabled: true,
         },
         ios: {
           extension: '.caf',
@@ -91,6 +111,7 @@ export default function App() {
           linearPCMBitDepth: 16,
           linearPCMIsBigEndian: false,
           linearPCMIsFloat: false,
+          meteringEnabled: true,
         },
         meteringEnabled: true,
       });
@@ -125,28 +146,32 @@ export default function App() {
   }
 
   async function sendAudioToGoogle(uri) {
-    const audioFile = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-  
-    const googleAPI = `https://speech.googleapis.com/v1/speech:recognize?key=${googleApiKey}`;
-    const body = JSON.stringify({
-      config: {
-        encoding: "LINEAR16",
-        sampleRateHertz: 16000,
-        languageCode: "en-US",
-      },
-      audio: {
-        content: audioFile,
-      },
-    });
-  
-    fetch(googleAPI, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: body,
-    })
-      .then((response) => response.json())
-      .then((data) => handleGoogleResponse(data))
-      .catch((error) => console.error("Error contacting Google API", error));
+    try {
+      const audioFile = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+    
+      const googleAPI = `https://speech.googleapis.com/v1/speech:recognize?key=${googleApiKey}`;
+      const body = JSON.stringify({
+        config: {
+          encoding: "LINEAR16", // Adjust the encoding format as per your recorded audio
+          sampleRateHertz: 44100, // Adjust the sample rate as per your recorded audio
+          languageCode: "en-US",
+        },
+        audio: {
+          content: audioFile,
+        },
+      });
+    
+      const response = await fetch(googleAPI, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: body,
+      });
+      
+      const data = await response.json();
+      handleGoogleResponse(data);
+    } catch (error) {
+      console.error("Error contacting Google API", error);
+    }
   }
 
   function handleGoogleResponse(data) {
@@ -180,13 +205,16 @@ export default function App() {
     }, 100);
   }
 
-  
+  if (!fontsLoaded) {
+    return null; // or a loading spinner
+  }
 
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
         <AnimatedBackground animatedWidth={animatedWidth} />
         <FlatList
+          ref={flatListRef}  // Attach the ref to the FlatList
           data={words}
           renderItem={({ item }) => (
             <View style={[styles.wordContainer, { width: width }]}>

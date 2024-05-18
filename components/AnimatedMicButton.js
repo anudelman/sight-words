@@ -49,7 +49,7 @@ const AnimatedMicButton = ({ startRecording, stopRecording, recording }) => {
     <View style={{ paddingBottom: insets.bottom + 16 }}>
       <TouchableOpacity onPress={handlePress}>
         <Animated.View style={animatedStyles}>
-          <Ionicons name={isRecording ? "mic-outline": "mic-off-outline"} size={56} color="black" />
+          <Ionicons name={isRecording ? "mic-outline": "mic-off-outline"} size={56} color="#65A30D" />
         </Animated.View>
       </TouchableOpacity>
     </View>
