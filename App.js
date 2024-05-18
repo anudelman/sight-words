@@ -7,6 +7,10 @@ import { SafeAreaView, SafeAreaProvider } from "react-native-safe-area-context";
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from "react-native-reanimated";
 import * as FileSystem from "expo-file-system";
 import AnimatedMicButton from "./components/AnimatedMicButton";
+import { useFonts, IrishGrover_400Regular } from "@expo-google-fonts/irish-grover";
+import Constants from 'expo-constants';
+
+const googleApiKey = Constants.expoConfig.extra.googleApiKey;
 
 const { width, height } = Dimensions.get("window");
 
@@ -14,7 +18,7 @@ const AnimatedBackground = ({ animatedWidth }) => {
   const animatedStyle = useAnimatedStyle(() => {
     return {
       width: animatedWidth.value,
-      backgroundColor: 'orange',
+      backgroundColor: 'green',
       height: height,
       position: 'absolute',
       left: 0,
@@ -26,8 +30,18 @@ const AnimatedBackground = ({ animatedWidth }) => {
 };
 
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    IrishGrover_400Regular,
+  });
+
   const [recording, setRecording] = useState(null);
+  const intervalRef = useRef(null);
   const animatedWidth = useSharedValue(0);
+
+  useEffect(() => {
+    return () => clearInterval(intervalRef.current); // Clear the interval when the component unmounts
+  }, []);
+
   const words = [
     "the", "of", "and", "a", "to", "in", "is", "you", "that", "it", "he", "was", 
     "for", "on", "are", "as", "with", "his", "they", "I", "at", "be", "this", 
@@ -101,6 +115,7 @@ export default function App() {
       sendAudioToGoogle(uri);
       setRecording(null);
       animatedWidth.value = withSpring(0);
+      clearInterval(intervalRef.current); // Clear the interval when stopping the recording
     } catch (error) {
       console.error("Failed to stop recording:", error);
       if (recording) {
@@ -111,9 +126,8 @@ export default function App() {
 
   async function sendAudioToGoogle(uri) {
     const audioFile = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-
-    const apiKey = "YOUR_ACTUAL_API_KEY"; //
-    const googleAPI = `https://speech.googleapis.com/v1/speech:recognize?key=${apiKey}`;
+  
+    const googleAPI = `https://speech.googleapis.com/v1/speech:recognize?key=${googleApiKey}`;
     const body = JSON.stringify({
       config: {
         encoding: "LINEAR16",
@@ -124,7 +138,7 @@ export default function App() {
         content: audioFile,
       },
     });
-
+  
     fetch(googleAPI, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -140,23 +154,33 @@ export default function App() {
     console.log("Google API response transcript:", transcript);
   }
 
-  async function monitorRecording(recording) {
-    const interval = setInterval(async () => {
+  function monitorRecording(recording) {
+    intervalRef.current = setInterval(async () => {
       if (recording) {
         const status = await recording.getStatusAsync();
         console.log("Recording status:", status);
+
         if (status.isRecording) {
-          const volume = status.metering;
-          console.log("Current volume level:", volume);
-          const normalizedWidth = Math.max(0, Math.min(width, (volume / -160) * width));
-          console.log("Normalized width:", normalizedWidth);
-          animatedWidth.value = withSpring(normalizedWidth, { damping: 20, stiffness: 90 });
+          // Ensure metering is enabled and valid
+          if (status.metering === undefined || status.metering === null) {
+            console.error("Metering not enabled or not supported on this device.");
+          } else {
+            const volume = status.metering;
+            console.log("Current volume level:", volume);
+
+            // Ensure the metering value is valid before calculating the normalized width
+            if (!isNaN(volume) && volume !== -160) {
+              const normalizedWidth = Math.max(0, Math.min(width, (volume / -160) * width));
+              console.log("Normalized width:", normalizedWidth);
+              animatedWidth.value = withSpring(normalizedWidth, { damping: 20, stiffness: 90 });
+            }
+          }
         }
       }
     }, 100);
-
-    return () => clearInterval(interval);
   }
+
+  
 
   return (
     <SafeAreaProvider>
@@ -167,7 +191,7 @@ export default function App() {
           renderItem={({ item }) => (
             <View style={[styles.wordContainer, { width: width }]}>
               <TouchableOpacity onPress={() => handleWordTap(item)}>
-                <Text style={styles.text}>{item}</Text>
+                <Text style={[styles.text, { fontFamily: "IrishGrover_400Regular" }]}>{item}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -191,7 +215,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: "#D9F99D",
   },
   wordContainer: {
     justifyContent: "center",
@@ -199,7 +223,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   text: {
-    color: "#000",
+    color: "#65A30D",
     fontSize: 64,
   },
 });
