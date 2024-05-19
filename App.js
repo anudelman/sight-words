@@ -18,7 +18,7 @@ const AnimatedBackground = ({ animatedWidth }) => {
   const animatedStyle = useAnimatedStyle(() => {
     return {
       width: animatedWidth.value,
-      backgroundColor: 'green',
+      backgroundColor: '#BEF264',
       height: height,
       position: 'absolute',
       left: 0,
@@ -35,10 +35,24 @@ export default function App() {
   });
 
   const [recording, setRecording] = useState(null);
+  const [permissionResponse, requestPermission] = Audio.usePermissions();
   const intervalRef = useRef(null);
   const animatedWidth = useSharedValue(0);
-
   const flatListRef = useRef();  // Reference to the FlatList
+  const [currentWordIndex, setCurrentWordIndex] = useState(0);
+
+  const words = [
+    "the", "of", "and", "a", "to", "in", "is", "you", "that", "it", "he", "was", 
+    "for", "on", "are", "as", "with", "his", "they", "I", "at", "be", "this", 
+    "have", "from", "or", "one", "had", "by", "word", "but", "not", "what", 
+    "all", "were", "we", "when", "your", "can", "said", "there", "use", "an", 
+    "each", "which", "she", "do", "how", "their", "if", "will", "up", "other", 
+    "about", "out", "many", "then", "them", "these", "so", "some", "her", 
+    "would", "make", "like", "him", "into", "time", "has", "look", "two", 
+    "more", "write", "go", "see", "number", "no", "way", "could", "people", 
+    "my", "than", "first", "water", "been", "call", "who", "oil", "its", "now", 
+    "find", "long", "down", "day", "did", "get", "come", "made", "may", "part",
+  ];
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -59,96 +73,51 @@ export default function App() {
     };
   }, []);
 
- 
-
-  const words = [
-    "the", "of", "and", "a", "to", "in", "is", "you", "that", "it", "he", "was", 
-    "for", "on", "are", "as", "with", "his", "they", "I", "at", "be", "this", 
-    "have", "from", "or", "one", "had", "by", "word", "but", "not", "what", 
-    "all", "were", "we", "when", "your", "can", "said", "there", "use", "an", 
-    "each", "which", "she", "do", "how", "their", "if", "will", "up", "other", 
-    "about", "out", "many", "then", "them", "these", "so", "some", "her", 
-    "would", "make", "like", "him", "into", "time", "has", "look", "two", 
-    "more", "write", "go", "see", "number", "no", "way", "could", "people", 
-    "my", "than", "first", "water", "been", "call", "who", "oil", "its", "now", 
-    "find", "long", "down", "day", "did", "get", "come", "made", "may", "part",
-  ];
-
   const handleWordTap = (word) => {
     Speech.speak(word);
   };
 
   async function startRecording() {
-    const permission = await Audio.requestPermissionsAsync();
-    if (permission.status !== "granted") {
-      console.error("Permission to access microphone not granted");
-      return;
-    }
-
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: true,
-      playsInSilentModeIOS: true,
-    });
-
-    const recording = new Audio.Recording();
     try {
-      await recording.prepareToRecordAsync({
-        android: {
-          extension: '.m4a',
-          outputFormat: Audio.RECORDING_OPTION_ANDROID_OUTPUT_FORMAT_MPEG_4,
-          audioEncoder: Audio.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_AAC,
-          sampleRate: 44100,
-          numberOfChannels: 1,
-          bitRate: 128000,
-          meteringEnabled: true,
-        },
-        ios: {
-          extension: '.caf',
-          audioQuality: Audio.RECORDING_OPTION_IOS_AUDIO_QUALITY_HIGH,
-          sampleRate: 44100,
-          numberOfChannels: 1,
-          bitRate: 128000,
-          linearPCMBitDepth: 16,
-          linearPCMIsBigEndian: false,
-          linearPCMIsFloat: false,
-          meteringEnabled: true,
-        },
-        meteringEnabled: true,
-      });
-      await recording.startAsync();
-      setRecording(recording);
-      console.log("Recording started successfully");
-      monitorRecording(recording);
-    } catch (error) {
-      console.error("Failed to start recording:", error);
-      if (recording) {
-        console.error("Recording status:", await recording.getStatusAsync());
+      if (permissionResponse.status !== 'granted') {
+        console.log('Requesting permission..');
+        await requestPermission();
       }
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      console.log('Starting recording..');
+      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      setRecording(recording);
+      console.log('Recording started');
+      monitorRecording(recording);
+    } catch (err) {
+      console.error('Failed to start recording', err);
     }
   }
 
   async function stopRecording() {
-    try {
-      if (!recording) return;
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      console.log("Recording stopped successfully", uri);
-      sendAudioToGoogle(uri);
-      setRecording(null);
-      animatedWidth.value = withSpring(0);
-      clearInterval(intervalRef.current); // Clear the interval when stopping the recording
-    } catch (error) {
-      console.error("Failed to stop recording:", error);
-      if (recording) {
-        console.error("Recording status:", await recording.getStatusAsync());
-      }
-    }
+    console.log('Stopping recording..');
+    if (!recording) return;
+    setRecording(undefined);
+    await recording.stopAndUnloadAsync();
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+    });
+    const uri = recording.getURI();
+    console.log('Recording stopped and stored at', uri);
+    sendAudioToGoogle(uri);
+    animatedWidth.value = withSpring(0);
+    clearInterval(intervalRef.current); // Clear the interval when stopping the recording
   }
 
   async function sendAudioToGoogle(uri) {
     try {
       const audioFile = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-    
+      console.log('Sending audio file to Google API...');
+
       const googleAPI = `https://speech.googleapis.com/v1/speech:recognize?key=${googleApiKey}`;
       const body = JSON.stringify({
         config: {
@@ -160,14 +129,15 @@ export default function App() {
           content: audioFile,
         },
       });
-    
+
       const response = await fetch(googleAPI, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: body,
       });
-      
+
       const data = await response.json();
+      console.log('Google API response received:', data);
       handleGoogleResponse(data);
     } catch (error) {
       console.error("Error contacting Google API", error);
@@ -175,8 +145,53 @@ export default function App() {
   }
 
   function handleGoogleResponse(data) {
+    if (data.error) {
+      console.error("Google API error:", data.error);
+      return;
+    }
+
     const transcript = data.results?.[0]?.alternatives?.[0]?.transcript;
     console.log("Google API response transcript:", transcript);
+
+    if (!transcript) {
+      console.warn("No transcript received from Google API.");
+      return;
+    }
+
+    const currentWord = words[currentWordIndex];
+    const similarity = calculateSimilarity(transcript, currentWord);
+    animatedWidth.value = withSpring(similarity * width, { damping: 20, stiffness: 90 });
+
+    if (similarity > 0.8) {
+      advanceToNextWord();
+    }
+  }
+
+  function calculateSimilarity(transcript, word) {
+    if (!transcript || !word) return 0;
+
+    const transcriptWords = transcript.toLowerCase().split(" ");
+    const targetWord = word.toLowerCase();
+    let maxSimilarity = 0;
+
+    transcriptWords.forEach((tWord) => {
+      let similarity = 0;
+      const minLen = Math.min(tWord.length, targetWord.length);
+      for (let i = 0; i < minLen; i++) {
+        if (tWord[i] === targetWord[i]) similarity++;
+      }
+      similarity /= targetWord.length;
+      maxSimilarity = Math.max(maxSimilarity, similarity);
+    });
+
+    return maxSimilarity;
+  }
+
+  function advanceToNextWord() {
+    if (currentWordIndex < words.length - 1) {
+      setCurrentWordIndex((prevIndex) => prevIndex + 1);
+      flatListRef.current.scrollToIndex({ index: currentWordIndex + 1, animated: true });
+    }
   }
 
   function monitorRecording(recording) {
@@ -193,11 +208,8 @@ export default function App() {
             const volume = status.metering;
             console.log("Current volume level:", volume);
 
-            // Ensure the metering value is valid before calculating the normalized width
-            if (!isNaN(volume) && volume !== -160) {
-              const normalizedWidth = Math.max(0, Math.min(width, (volume / -160) * width));
-              console.log("Normalized width:", normalizedWidth);
-              animatedWidth.value = withSpring(normalizedWidth, { damping: 20, stiffness: 90 });
+            if (volume < -80) {
+              animatedWidth.value = withSpring(0, { damping: 20, stiffness: 90 });
             }
           }
         }
@@ -216,7 +228,7 @@ export default function App() {
         <FlatList
           ref={flatListRef}  // Attach the ref to the FlatList
           data={words}
-          renderItem={({ item }) => (
+          renderItem={({ item, index }) => (
             <View style={[styles.wordContainer, { width: width }]}>
               <TouchableOpacity onPress={() => handleWordTap(item)}>
                 <Text style={[styles.text, { fontFamily: "IrishGrover_400Regular" }]}>{item}</Text>
