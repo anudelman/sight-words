@@ -3,15 +3,17 @@ import { View, Dimensions, StyleSheet, FlatList, TouchableOpacity, Text } from "
 import { StatusBar } from "expo-status-bar";
 import * as Speech from "expo-speech";
 import { Audio } from "expo-av";
+import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView, SafeAreaProvider } from "react-native-safe-area-context";
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from "react-native-reanimated";
 import * as FileSystem from "expo-file-system";
 import AnimatedMicButton from "./components/AnimatedMicButton";
 import { useFonts, IrishGrover_400Regular } from "@expo-google-fonts/irish-grover";
 import Constants from 'expo-constants';
+import * as Sharing from 'expo-sharing';
 
 const googleApiKey = Constants.expoConfig.extra.googleApiKey;
-
+const fileUri = FileSystem.documentDirectory + 'recording.wav';
 const { width, height } = Dimensions.get("window");
 
 const AnimatedBackground = ({ animatedWidth }) => {
@@ -30,12 +32,16 @@ const AnimatedBackground = ({ animatedWidth }) => {
 };
 
 export default function App() {
+
+  useEffect(() => {
+    getPermissions();
+  }, []);
+
   const [fontsLoaded] = useFonts({
     IrishGrover_400Regular,
   });
 
   const [recording, setRecording] = useState(null);
-  const [permissionResponse, requestPermission] = Audio.usePermissions();
   const intervalRef = useRef(null);
   const animatedWidth = useSharedValue(0);
   const flatListRef = useRef();  // Reference to the FlatList
@@ -54,6 +60,30 @@ export default function App() {
     "find", "long", "down", "day", "did", "get", "come", "made", "may", "part",
   ];
 
+  // useEffect to log file URI
+  useEffect(() => {
+    async function logFileUri() {
+      const fileInfo = await FileSystem.getInfoAsync(fileUri);
+      if (fileInfo.exists) {
+        console.log('File exists at: ', fileUri);
+      } else {
+        console.log('File does not exist');
+      }
+    }
+
+    logFileUri();
+  }, []);
+
+  const shareFile = async () => {
+    const fileInfo = await FileSystem.getInfoAsync(fileUri);
+    if (fileInfo.exists) {
+      await Sharing.shareAsync(fileUri);
+    } else {
+      console.log('File does not exist');
+    }
+  };
+
+  // useEffect to handle initial animations and cleanup
   useEffect(() => {
     const timer = setTimeout(() => {
       if (flatListRef.current && words.length > 1) {
@@ -77,19 +107,43 @@ export default function App() {
     Speech.speak(word);
   };
 
+  async function getPermissions() {
+    const response = await Audio.requestPermissionsAsync();
+    if (response.status !== 'granted') {
+      alert('Sorry, we need audio recording permissions to make this work!');
+    }
+  }
+
   async function startRecording() {
     try {
-      if (permissionResponse.status !== 'granted') {
-        console.log('Requesting permission..');
-        await requestPermission();
-      }
+      await getPermissions();
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
       });
 
       console.log('Starting recording..');
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      const recording = new Audio.Recording();
+      await recording.prepareToRecordAsync({
+        android: {
+          extension: '.wav',
+          outputFormat: Audio.RECORDING_OPTION_ANDROID_OUTPUT_FORMAT_PCM_16BIT,
+          audioEncoder: Audio.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_PCM_16BIT,
+          sampleRate: 44100,
+          numberOfChannels: 1,
+          isMeteringEnabled: true, // Enable metering
+        },
+        ios: {
+          extension: '.wav',
+          audioQuality: Audio.RECORDING_OPTION_IOS_AUDIO_QUALITY_HIGH,
+          sampleRate: 44100,
+          numberOfChannels: 1,
+          bitRate: 128000,
+          isMeteringEnabled: true, // Enable metering
+        },
+        isMeteringEnabled: true
+      });
+      await recording.startAsync();
       setRecording(recording);
       console.log('Recording started');
       monitorRecording(recording);
@@ -115,18 +169,18 @@ export default function App() {
 
   async function sendAudioToGoogle(uri) {
     try {
-      const audioFile = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+      const base64Audio = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
       console.log('Sending audio file to Google API...');
 
       const googleAPI = `https://speech.googleapis.com/v1/speech:recognize?key=${googleApiKey}`;
       const body = JSON.stringify({
         config: {
-          encoding: "LINEAR16", // Adjust the encoding format as per your recorded audio
-          sampleRateHertz: 44100, // Adjust the sample rate as per your recorded audio
+          encoding: "LINEAR16",
+          sampleRateHertz: 44100,
           languageCode: "en-US",
         },
         audio: {
-          content: audioFile,
+          content: base64Audio,
         },
       });
 
@@ -244,6 +298,9 @@ export default function App() {
           keyExtractor={(item, index) => index.toString()}
         />
         <AnimatedMicButton startRecording={startRecording} stopRecording={stopRecording} recording={recording} />
+        {/* <TouchableOpacity onPress={shareFile} style={{ position: 'absolute', top: 80, right: 50 }}>
+          <Ionicons name={"share-outline"} size={40} color="#65A30D" />
+        </TouchableOpacity> */}
         <StatusBar style="auto" />
       </SafeAreaView>
     </SafeAreaProvider>
