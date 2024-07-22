@@ -1,278 +1,107 @@
-import React, { useState, useEffect, useRef } from "react";
-import { View, Dimensions, StyleSheet, FlatList, TouchableOpacity, Text } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { View, Dimensions, StyleSheet, FlatList, Text, TouchableOpacity } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import * as Speech from "expo-speech";
-import { Audio } from "expo-av";
-import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView, SafeAreaProvider } from "react-native-safe-area-context";
-import Animated, { useSharedValue, useAnimatedStyle, withSpring } from "react-native-reanimated";
-import * as FileSystem from "expo-file-system";
-import AnimatedMicButton from "./components/AnimatedMicButton";
-import { useFonts, IrishGrover_400Regular } from "@expo-google-fonts/irish-grover";
-import Constants from 'expo-constants';
-import * as Sharing from 'expo-sharing';
+import { useFonts, FredokaOne_400Regular } from '@expo-google-fonts/fredoka-one';
+import RestartIcon from "./components/RestartIcon";
+import SlowRestIcon from "./components/SlowRestIcon";
+import SlowActiveIcon from "./components/SlowActiveIcon";
+import ShuffleIcon from "./components/ShuffleIcon";
+import SpeakIcon from "./components/SpeakIcon";
 
-const googleApiKey = Constants.expoConfig.extra.googleApiKey;
-const fileUri = FileSystem.documentDirectory + 'recording.wav';
 const { width, height } = Dimensions.get("window");
 
 const AnimatedBackground = ({ animatedWidth }) => {
-  const animatedStyle = useAnimatedStyle(() => {
-    return {
-      width: animatedWidth.value,
-      backgroundColor: '#BEF264',
-      height: height,
-      position: 'absolute',
-      left: 0,
-      top: 0,
-    };
-  });
+  const animatedStyle = {
+    width: animatedWidth,
+    height: height,
+    position: 'absolute',
+    left: 0,
+    top: 0,
+  };
 
-  return <Animated.View style={animatedStyle} />;
+  return <View style={animatedStyle} />;
 };
 
 export default function App() {
-
   useEffect(() => {
-    getPermissions();
+    // Removed getPermissions call since TTS does not require it
   }, []);
 
   const [fontsLoaded] = useFonts({
-    IrishGrover_400Regular,
+    FredokaOne_400Regular,
   });
 
-  const [recording, setRecording] = useState(null);
-  const intervalRef = useRef(null);
-  const animatedWidth = useSharedValue(0);
-  const flatListRef = useRef();  // Reference to the FlatList
+  const animatedWidth = width;
+  const flatListRef = useRef();
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
+  const [isSlowActive, setIsSlowActive] = useState(false); // State for Slow button
 
   const words = [
-    "the", "of", "and", "a", "to", "in", "is", "you", "that", "it", "he", "was", 
-    "for", "on", "are", "as", "with", "his", "they", "I", "at", "be", "this", 
-    "have", "from", "or", "one", "had", "by", "word", "but", "not", "what", 
-    "all", "were", "we", "when", "your", "can", "said", "there", "use", "an", 
-    "each", "which", "she", "do", "how", "their", "if", "will", "up", "other", 
-    "about", "out", "many", "then", "them", "these", "so", "some", "her", 
-    "would", "make", "like", "him", "into", "time", "has", "look", "two", 
-    "more", "write", "go", "see", "number", "no", "way", "could", "people", 
-    "my", "than", "first", "water", "been", "call", "who", "oil", "its", "now", 
-    "find", "long", "down", "day", "did", "get", "come", "made", "may", "part",
+    "a", "I", "the", "to", "is", "you", "he", "it", "we", "an",
+    "in", "at", "on", "and", "up", "am", "of", "be", "me", "do",
+    "no", "so", "go", "my", "by", "as", "but", "or", "had", "has",
+    "was", "not", "his", "her", "she", "all", "can", "did", "him",
+    "see", "for", "got", "how", "day", "may", "say", "out", "now",
+    "then", "this", "that", "will", "with", "from", "came", "made",
+    "were", "when", "what", "them", "like", "have", "here", "some",
+    "could", "down", "which", "their", "there", "more", "look", "who",
+    "long", "word", "know", "come", "find", "many", "first", "only",
+    "just", "went", "say", "over", "about", "right", "because", "people",
+    "give", "work", "must", "put", "again", "number", "these", "would",
+    "every", "always", "under", "most", "other", "very", "want", "too",
+    "where", "went", "call", "thought", "school", "before", "after",
+    "around", "house", "small", "great", "should", "another", "near",
+    "through", "father", "water", "large", "together", "find", "don't",
+    "world", "learn", "might", "walk", "also", "head", "light", "high",
+    "saw", "year", "night", "mother", "change", "four", "kind", "away",
+    "move", "both", "along", "carry", "answer", "eye", "earth", "thought",
+    "always"
   ];
 
-  // useEffect to log file URI
-  useEffect(() => {
-    async function logFileUri() {
-      const fileInfo = await FileSystem.getInfoAsync(fileUri);
-      if (fileInfo.exists) {
-        console.log('File exists at: ', fileUri);
-      } else {
-        console.log('File does not exist');
-      }
-    }
-
-    logFileUri();
-  }, []);
-
-  const shareFile = async () => {
-    const fileInfo = await FileSystem.getInfoAsync(fileUri);
-    if (fileInfo.exists) {
-      await Sharing.shareAsync(fileUri);
-    } else {
-      console.log('File does not exist');
-    }
-  };
-
-  // useEffect to handle initial animations and cleanup
   useEffect(() => {
     const timer = setTimeout(() => {
       if (flatListRef.current && words.length > 1) {
         flatListRef.current.scrollToOffset({ animated: true, offset: width / 2 });
         setTimeout(() => {
           flatListRef.current.scrollToOffset({ animated: true, offset: 0 });
-        }, 800);  // Return to initial position after 800ms
+        }, 800);
       }
-    }, 1000);  // Initial delay of 1000ms
+    }, 1000);
 
     return () => {
       clearTimeout(timer);
-      clearInterval(intervalRef.current);
-      if (recording) {
-        stopRecording();
-      }
     };
   }, []);
 
-  const handleWordTap = (word) => {
-    Speech.speak(word);
+  const handleScroll = (event) => {
+    const index = Math.round(event.nativeEvent.contentOffset.x / width);
+    setCurrentWordIndex(index);
   };
 
-  async function getPermissions() {
-    const response = await Audio.requestPermissionsAsync();
-    if (response.status !== 'granted') {
-      alert('Sorry, we need audio recording permissions to make this work!');
-    }
-  }
+  const scrollToRandomWord = () => {
+    const randomIndex = Math.floor(Math.random() * words.length);
+    flatListRef.current.scrollToIndex({ index: randomIndex, animated: true });
+    setCurrentWordIndex(randomIndex);
+  };
 
-  async function startRecording() {
-    try {
-      await getPermissions();
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
+  const getItemLayout = (data, index) => (
+    { length: width, offset: width * index, index }
+  );
 
-      console.log('Starting recording..');
-      const recording = new Audio.Recording();
-      await recording.prepareToRecordAsync({
-        android: {
-          extension: '.wav',
-          outputFormat: Audio.RECORDING_OPTION_ANDROID_OUTPUT_FORMAT_PCM_16BIT,
-          audioEncoder: Audio.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_PCM_16BIT,
-          sampleRate: 44100,
-          numberOfChannels: 1,
-          isMeteringEnabled: true, // Enable metering
-        },
-        ios: {
-          extension: '.wav',
-          audioQuality: Audio.RECORDING_OPTION_IOS_AUDIO_QUALITY_HIGH,
-          sampleRate: 44100,
-          numberOfChannels: 1,
-          bitRate: 128000,
-          isMeteringEnabled: true, // Enable metering
-        },
-        isMeteringEnabled: true
-      });
-      await recording.startAsync();
-      setRecording(recording);
-      console.log('Recording started');
-      monitorRecording(recording);
-    } catch (err) {
-      console.error('Failed to start recording', err);
-    }
-  }
-
-  async function stopRecording() {
-    console.log('Stopping recording..');
-    if (!recording) return;
-    setRecording(undefined);
-    await recording.stopAndUnloadAsync();
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-    });
-    const uri = recording.getURI();
-    console.log('Recording stopped and stored at', uri);
-    sendAudioToGoogle(uri);
-    animatedWidth.value = withSpring(0);
-    clearInterval(intervalRef.current); // Clear the interval when stopping the recording
-  }
-
-  async function sendAudioToGoogle(uri) {
-    try {
-      const base64Audio = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-      console.log('Sending audio file to Google API...');
-
-      const googleAPI = `https://speech.googleapis.com/v1/speech:recognize?key=${googleApiKey}`;
-      const body = JSON.stringify({
-        config: {
-          encoding: "LINEAR16",
-          sampleRateHertz: 44100,
-          languageCode: "en-US",
-        },
-        audio: {
-          content: base64Audio,
-        },
-      });
-
-      const response = await fetch(googleAPI, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: body,
-      });
-
-      const data = await response.json();
-      console.log('Google API response received:', data);
-      handleGoogleResponse(data);
-    } catch (error) {
-      console.error("Error contacting Google API", error);
-    }
-  }
-
-  function handleGoogleResponse(data) {
-    if (data.error) {
-      console.error("Google API error:", data.error);
-      return;
-    }
-
-    const transcript = data.results?.[0]?.alternatives?.[0]?.transcript;
-    console.log("Google API response transcript:", transcript);
-
-    if (!transcript) {
-      console.warn("No transcript received from Google API.");
-      return;
-    }
-
+  const speakCurrentWord = () => {
     const currentWord = words[currentWordIndex];
-    const similarity = calculateSimilarity(transcript, currentWord);
-    animatedWidth.value = withSpring(similarity * width, { damping: 20, stiffness: 90 });
+    const rate = isSlowActive ? 0.1 : 1.0; // Set the rate based on the slow mode
+    Speech.speak(currentWord, { rate });
+  };
 
-    if (similarity > 0.8) {
-      advanceToNextWord();
-    }
-  }
-
-  function calculateSimilarity(transcript, word) {
-    if (!transcript || !word) return 0;
-
-    const transcriptWords = transcript.toLowerCase().split(" ");
-    const targetWord = word.toLowerCase();
-    let maxSimilarity = 0;
-
-    transcriptWords.forEach((tWord) => {
-      let similarity = 0;
-      const minLen = Math.min(tWord.length, targetWord.length);
-      for (let i = 0; i < minLen; i++) {
-        if (tWord[i] === targetWord[i]) similarity++;
-      }
-      similarity /= targetWord.length;
-      maxSimilarity = Math.max(maxSimilarity, similarity);
-    });
-
-    return maxSimilarity;
-  }
-
-  function advanceToNextWord() {
-    if (currentWordIndex < words.length - 1) {
-      setCurrentWordIndex((prevIndex) => prevIndex + 1);
-      flatListRef.current.scrollToIndex({ index: currentWordIndex + 1, animated: true });
-    }
-  }
-
-  function monitorRecording(recording) {
-    intervalRef.current = setInterval(async () => {
-      if (recording) {
-        const status = await recording.getStatusAsync();
-        console.log("Recording status:", status);
-
-        if (status.isRecording) {
-          // Ensure metering is enabled and valid
-          if (status.metering === undefined || status.metering === null) {
-            console.error("Metering not enabled or not supported on this device.");
-          } else {
-            const volume = status.metering;
-            console.log("Current volume level:", volume);
-
-            if (volume < -80) {
-              animatedWidth.value = withSpring(0, { damping: 20, stiffness: 90 });
-            }
-          }
-        }
-      }
-    }, 100);
-  }
+  const toggleSlowMode = () => {
+    setIsSlowActive(!isSlowActive);
+  };
 
   if (!fontsLoaded) {
-    return null; // or a loading spinner
+    return null;
   }
 
   return (
@@ -280,13 +109,11 @@ export default function App() {
       <SafeAreaView style={styles.container}>
         <AnimatedBackground animatedWidth={animatedWidth} />
         <FlatList
-          ref={flatListRef}  // Attach the ref to the FlatList
+          ref={flatListRef}
           data={words}
-          renderItem={({ item, index }) => (
+          renderItem={({ item }) => (
             <View style={[styles.wordContainer, { width: width }]}>
-              <TouchableOpacity onPress={() => handleWordTap(item)}>
-                <Text style={[styles.text, { fontFamily: "IrishGrover_400Regular" }]}>{item}</Text>
-              </TouchableOpacity>
+              <Text style={styles.text}>{item}</Text>
             </View>
           )}
           horizontal
@@ -296,11 +123,27 @@ export default function App() {
           decelerationRate="fast"
           showsHorizontalScrollIndicator={false}
           keyExtractor={(item, index) => index.toString()}
+          onScroll={handleScroll}
+          getItemLayout={getItemLayout}
         />
-        <AnimatedMicButton startRecording={startRecording} stopRecording={stopRecording} recording={recording} />
-        {/* <TouchableOpacity onPress={shareFile} style={{ position: 'absolute', top: 80, right: 50 }}>
-          <Ionicons name={"share-outline"} size={40} color="#65A30D" />
-        </TouchableOpacity> */}
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity onPress={() => flatListRef.current.scrollToIndex({ index: 0, animated: true })} style={styles.iconButton}>
+            <RestartIcon width={80} height={80} />
+            <Text style={styles.iconButtonText}>Restart</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={toggleSlowMode} style={styles.iconButton}>
+            {isSlowActive ? <SlowActiveIcon /> : <SlowRestIcon />}
+            <Text style={styles.iconButtonText}>Slow</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={speakCurrentWord} style={styles.iconButton}>
+            <SpeakIcon />
+            <Text style={styles.iconButtonText}>Speak</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={scrollToRandomWord} style={styles.iconButton}>
+            <ShuffleIcon />
+            <Text style={styles.iconButtonText}>Shuffle</Text>
+          </TouchableOpacity>
+        </View>
         <StatusBar style="auto" />
       </SafeAreaView>
     </SafeAreaProvider>
@@ -312,7 +155,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#D9F99D",
+    backgroundColor: '#D9F99D'
   },
   wordContainer: {
     justifyContent: "center",
@@ -320,7 +163,33 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   text: {
-    color: "#65A30D",
+    color: "#3F6212",
     fontSize: 64,
+    fontFamily: "FredokaOne_400Regular",
+  },
+  buttonContainer: {
+    
+    height: 102.33,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    bottom: 20,
+    display: 'flex',
+    gap: 12
+  },
+  iconButton: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  iconButtonText: {
+    color: '#4D7C0F',
+    fontFamily: "Fredoka One",
+    fontSize: 14,
+    fontStyle: "normal",
+    fontWeight: 400,
+    lineHeight: "normal",
+    letterSpacing: -0.24,
+    marginTop: 8
   },
 });
