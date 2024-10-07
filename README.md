@@ -1,2 +1,2 @@
 # sight-words
-A simple app that helps early readers improve their recall of high frequency words (also known as sight words).
+The "Sight Words" mobile app aims to assist children in kindergarten to 2nd grade in recognizing and learning sight words, which are commonly used words that children are encouraged to memorize as a whole by sight, so they can automatically recognize them in texts. This will enhance their reading skills and build a strong foundation for literacy.

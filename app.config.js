@@ -6,7 +6,7 @@ export default ({ config }) => ({
   name: "sight-words",
   slug: "sight-words",
   version: "1.0.0",
-  orientation: "portrait",
+  orientation: "default", // Allows both portrait and landscape orientations
   icon: "./assets/icon.png",
   userInterfaceStyle: "light",
   splash: {
@@ -15,12 +15,12 @@ export default ({ config }) => ({
     backgroundColor: "#ffffff"
   },
   extra: {
-    googleApiKey: process.env.GOOGLE_API_KEY,
+    googleApiKey: process.env.GOOGLE_API_KEY, // Correct usage of environment variable
   },
   ios: {
     supportsTablet: true,
     infoPlist: {
-        UIBackgroundModes: ["audio"]
+      UIBackgroundModes: ["audio"] // Allows background audio for iOS
     }
   },
   android: {
@@ -33,6 +33,6 @@ export default ({ config }) => ({
     favicon: "./assets/favicon.png"
   },
   plugins: [
-    "expo-font"
+    "expo-font" // Correct use of Expo plugins
   ]
 });

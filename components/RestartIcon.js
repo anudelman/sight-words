@@ -1,21 +1,23 @@
-import * as React from "react"
-import Svg, { Path } from "react-native-svg"
-const RestartIcon = (props) => (
+import * as React from "react";
+import Svg, { Path } from "react-native-svg";
+
+const RestartIcon = ({ size = 80, ...props }) => (
   <Svg
     xmlns="http://www.w3.org/2000/svg"
-    width={81}
-    height={80}
+    width={size}
+    height={size}
     fill="none"
     {...props}
   >
     <Path
-      fill="#BEF264"
+      // fill="#D9F99D"
       d="M80.084 39.985c0 21.815-18.078 39.892-39.924 39.892C18.345 79.877.268 61.8.268 39.985.268 18.139 18.314.06 40.13.06c21.846 0 39.954 18.078 39.954 39.924Z"
     />
     <Path
-      fill="#84CC16"
+      fill="#65A30D"
       d="M53.579 53.49c1.246 0 2.321-.934 2.321-2.746V29.341c0-1.784-1.075-2.718-2.321-2.718-.623 0-1.246.226-1.84.594L33.846 37.721c-1.048.623-1.557 1.415-1.557 2.321 0 .906.51 1.727 1.557 2.322l17.893 10.532c.594.368 1.217.594 1.84.594ZM26.513 54h3.907c1.416 0 2.152-.708 2.152-2.152V28.123c0-1.472-.736-2.123-2.152-2.123h-3.907c-1.387 0-2.123.68-2.123 2.123v23.725c0 1.444.736 2.152 2.123 2.152Z"
     />
   </Svg>
-)
-export default RestartIcon
+);
+
+export default RestartIcon;
